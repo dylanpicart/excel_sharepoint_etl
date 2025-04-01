@@ -1,0 +1,52 @@
+# Node dependencies
+node_modules/
+package-lock.json
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Jupyter / notebook checkpoints
+.ipynb_checkpoints/
+
+# Local virtualenv (if you ever add one)
+.env/
+.venv/
+env/
+venv/
+
+# Config
+.env
+
+# Output folders
+data/csv/
+data/pdfs/
+logs/
+failed_downloads.csv
+*.log
+
+# Consent form PDFs
+*.pdf
+
+# CSV download files
+to_download_*.csv
+
+# Browser cache / auth tokens
+cookies.json
+
+# Sharepoint
+config.json
+
+# MacOS & system files
+.DS_Store
+Thumbs.db
+
+# VS Code or editor configs
+.vscode/
+.idea/
+*.swp
+
+# Config for Excel
+*.reg
