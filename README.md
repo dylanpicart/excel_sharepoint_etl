@@ -7,7 +7,7 @@ This multilanguage project leverages Python, Bash, and JavaScript to build a lig
 - Downloading PDF files via browser automation using Puppeteer
 - Uploading and linking PDFs stored in SharePoint
 
-The pipeline has been designed for efficient processing of multiple sheets and files while preserving advanced Excel formatting and ensuring secure, authenticated access via SharePoint.
+The pipeline has been designed for efficient processing of multiple sheets and files while preserving advanced Excel formatting and ensuring secure, authenticated access via SharePoint. This version has
 
 ---
 
@@ -163,6 +163,25 @@ excel_sharepoint_etl/
 
    Ensure that the PDFs are organized into subfolders under the common PDF folder specified in `SHAREPOINT_PDF_FOLDER`. Your sheets will map to these subfolders.
 
+4. **Node Dependencies:**
+
+    We now use dotenv in our JS scripts. Make sure your js/package.json has:
+
+    ```json
+    "dependencies": {
+      "dotenv": "^10.0.0",
+      "puppeteer": "...",
+      "puppeteer-cluster": "...",
+      "csv-parser": "..."
+    }
+    ```
+    And install with:
+
+    ```bash
+    cd js
+    npm install
+    ```
+
 ---
 
 ## Usage
@@ -184,6 +203,48 @@ To run the full pipeline:
 
 ```bash
 ./scripts/run_all.sh
+```
+
+Download PDFs (clustered)
+We’ve refactored download_pdfs_cluster.js (and download_pdfs_cluster_debug.js) so that:
+
+If you call it with two args, it treats them as:
+
+```bash
+node js/download_pdfs_cluster.js <OUTPUT_DIR> <CSV_FILE>
+```
+If you call it with just the CSV path, it defaults `<OUTPUT_DIR>` to the SharePoint folder you set in `PDF_TELE`:
+
+```bash
+node js/download_pdfs_cluster.js data/csv/to_download_Remote_Telemental_Health-Rows.csv
+```
+You can still pass `--debug` as a third flag to get verbose logs:
+
+```bash
+node js/download_pdfs_cluster_debug.js \
+  data/csv/to_download_Remote_Telemental_Health-Rows.csv \
+  --debug
+```
+
+**Add Hyperlinks (single sheet)**
+
+You can now rebuild just one hyperlink sheet by passing its “– Rows” name:
+
+```bash
+python3 python/add_hyperlinks.py "Remote Telemental Health - Rows"
+```
+This:
+
+Loads your existing workbook (`EXCEL_PATH`).
+
+Removes & recreates only the matching “-- Hyperlink” sheet.
+
+Injects hyperlinks for every PDF in the corresponding `PDF_TELE` folder.
+
+To regenerate all hyperlink sheets, simply run without arguments:
+
+```bash
+python3 python/add_hyperlinks.py
 ```
 
 ### Individual Script Usage
