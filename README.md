@@ -7,7 +7,7 @@ This multilanguage project leverages Python, Bash, and JavaScript to build a lig
 - Downloading PDF files via browser automation using Puppeteer
 - Uploading and linking PDFs stored in SharePoint
 
-The pipeline has been designed for efficient processing of multiple sheets and files while preserving advanced Excel formatting and ensuring secure, authenticated access via SharePoint. This version has
+The pipeline has been designed for efficient processing of multiple sheets and files while preserving advanced Excel formatting and ensuring secure, authenticated access via SharePoint. This version allows the user to choose between downloading and hyperlinking one sheet at a time, or to loop through the entire Excel file and loop through all the sheets.
 
 ---
 
