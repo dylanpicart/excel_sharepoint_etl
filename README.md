@@ -216,13 +216,13 @@ node js/download_pdfs_cluster.js <OUTPUT_DIR> <CSV_FILE>
 If you call it with just the CSV path, it defaults `<OUTPUT_DIR>` to the SharePoint folder you set in `PDF_TELE`:
 
 ```bash
-node js/download_pdfs_cluster.js data/csv/to_download_Remote_Telemental_Health-Rows.csv
+node js/download_pdfs_cluster.js data/csv/to_download_Sheet_With-Rows.csv
 ```
 You can still pass `--debug` as a third flag to get verbose logs:
 
 ```bash
 node js/download_pdfs_cluster_debug.js \
-  data/csv/to_download_Remote_Telemental_Health-Rows.csv \
+  data/csv/to_download_Sheet_With-Rows.csv \
   --debug
 ```
 
@@ -231,7 +231,7 @@ node js/download_pdfs_cluster_debug.js \
 You can now rebuild just one hyperlink sheet by passing its “– Rows” name:
 
 ```bash
-python3 python/add_hyperlinks.py "Remote Telemental Health - Rows"
+python3 python/add_hyperlinks.py "Sheet 1 - Rows"
 ```
 This:
 
