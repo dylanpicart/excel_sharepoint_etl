@@ -1,110 +1,80 @@
-import pandas as pd
 import os
+import json
 import sys
-import re
-import time
+import urllib.parse
 from pathlib import Path
 from dotenv import load_dotenv
+from openpyxl import load_workbook
+from openpyxl.styles import Font
 
-# Load .env
+# Load .env from project root
 dotenv_path = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(dotenv_path)
 
-# Timing start
-start = time.time()
-
-# --- CLI args ---
-# Usage: python extract_checked.py "Sheet Name" [--debug]
-debug = "--debug" in sys.argv
-# strip out --debug so sheet_name logic isn’t confused
-args = [a for a in sys.argv[1:] if a != "--debug"]
-sheet_name = args[0] if args else "SY1920 Remote Consent - Rows"
-
-print(f"🔍 DEBUG: Using sheet_name = {sheet_name}", file=sys.stderr)
-if debug:
-    print("🔍 DEBUG: Running in debug mode", file=sys.stderr)
-
-safe_sheet = re.sub(r'[\\/*?:"<>|]', "_", sheet_name)
 excel_path = Path(os.getenv("EXCEL_PATH"))
-csv_dir     = Path(os.getenv("CSV_DIR", "data/csv"))
-pdf_root_dir= Path(os.getenv("PDF_ROOT_DIR", "data/pdfs"))
-output_csv  = csv_dir / f"to_download_{safe_sheet}.csv"
+sharepoint_base_url = os.getenv("SHAREPOINT_BASE_URL")
+library_url = os.getenv("SHAREPOINT_LIBRARY_URL")
+pdf_folder_base = os.getenv("SHAREPOINT_PDF_FOLDER")
 
-# Define required columns
-required_cols = ['Status', 'Hyperlink', 'PDF Name']
+cfg_file = Path(__file__).resolve().parent.parent / "config.json"
+if not cfg_file.exists():
+    raise FileNotFoundError("config.json not found")
+config = json.loads(cfg_file.read_text())
+sheet_configs = config["SHEET_CONFIGS"]
 
-# Load sheet
-xls = pd.ExcelFile(excel_path)
-matched = next((s for s in xls.sheet_names if s.strip()==sheet_name.strip()), None)
-if not matched:
-    raise ValueError(f"❌ Sheet '{sheet_name}' not found")
+# Determine which sheet to process (optional CLI arg)
+args = [a for a in sys.argv[1:] if a != "--debug"]
+selected_sheet = args[0] if args else None
 
-df = pd.read_excel(excel_path, sheet_name=matched, engine="openpyxl")
-df.columns = df.columns.str.strip()
+wb = load_workbook(excel_path)
 
-missing = [c for c in required_cols if c not in df.columns]
-if missing:
-    raise ValueError(f"❌ Missing columns in '{sheet_name}': {missing}")
+sheets = [selected_sheet] if selected_sheet else list(sheet_configs.keys())
 
-# Diagnostics before filtering
-print("🔍 Status values:", df['Status'].unique(), file=sys.stderr)
-print("🔍 Sample Hyperlinks:", df['Hyperlink'].dropna().head().tolist(), file=sys.stderr)
-print("🔍 Sample PDF Names:", df['PDF Name'].dropna().head().tolist(), file=sys.stderr)
+for sheet_name in sheets:
+    cfg = sheet_configs.get(sheet_name)
+    if not cfg:
+        print(f"⚠️ Sheet '{sheet_name}' not found in config.json", file=sys.stderr)
+        continue
+    if sheet_name not in wb.sheetnames:
+        print(f"⚠️ Sheet not found in workbook: {sheet_name}", file=sys.stderr)
+        continue
 
-# Detailed per-row debug for Remote Telemental Health
-if debug and sheet_name == "Remote Telemental Health - Rows":
-    print("── Detailed debug for Remote Telemental Health ──", file=sys.stderr)
-    for idx, row in df.iterrows():
-        status = row['Status']
-        link   = str(row['Hyperlink']).strip()
-        name   = str(row['PDF Name']).strip()
-        passes = (
-            status is True and
-            link.startswith("http") and
-            name != ""
-        )
-        print(
-            f"Row {idx+2:3}: Status={status!r}, "
-            f"Link={repr(link)[:30]:30}, "
-            f"Name={repr(name):30}, "
-            f"passes_filter={passes}",
-            file=sys.stderr
-        )
+    ws_original = wb[sheet_name]
+    new_sheet = sheet_name.replace(" - Rows", " - Hyperlink")
 
-# Clean up and filter
-df['Hyperlink'] = df['Hyperlink'].astype(str).str.strip()
-df['PDF Name'] = df['PDF Name'].astype(str).str.strip()
+    if new_sheet in wb.sheetnames:
+        wb.remove(wb[new_sheet])
+    ws_new = wb.create_sheet(title=new_sheet)
 
-checked_df = df[
-    df['Status'].eq(True) &
-    df['Hyperlink'].str.startswith("http") &
-    df['PDF Name'].notna() &
-    (df['PDF Name'] != "")
-].copy()
+    header = next(ws_original.iter_rows(min_row=1, max_row=1, values_only=True))
+    try:
+        pdf_col = header.index("PDF Name") + 1
+    except ValueError:
+        print(f"⚠️ 'PDF Name' column missing in {sheet_name}", file=sys.stderr)
+        continue
 
-# Normalize filenames and convert URLs
-checked_df.loc[:, 'PDF Name'] = (
-    checked_df['PDF Name']
-      .str.replace(r'[\\/*?:"<>|]', '_', regex=True)
-)
-checked_df.loc[:, 'Hyperlink'] = (
-    checked_df['Hyperlink']
-      .str.replace('/edit/', '/print/')
-)
+    ws_new.cell(row=1, column=1, value="PDF Name")
+    hyperlink_font = Font(color="0000FF", underline="single")
 
-# Save result
-csv_dir.mkdir(parents=True, exist_ok=True)
-checked_df[['Hyperlink', 'PDF Name']].to_csv(output_csv, index=False)
+    encoded_listurl = urllib.parse.quote(library_url, safe='')
+    parent_folder = f"{pdf_folder_base}/{cfg['sp_subfolder']}"
+    encoded_parent = urllib.parse.quote(parent_folder, safe='')
 
-# Create PDF output folder
-folder_name = sheet_name.replace(" - Rows", "").strip()
-output_path = pdf_root_dir / folder_name
-output_path.mkdir(parents=True, exist_ok=True)
+    for row_idx, row in enumerate(ws_original.iter_rows(min_row=2, values_only=False), start=2):
+        cell = row[pdf_col - 1]
+        pdf_name = cell.value
+        new_cell = ws_new.cell(row=row_idx, column=1, value=pdf_name)
+        if not (isinstance(pdf_name, str) and pdf_name.strip()):
+            continue
+        pdf_name = pdf_name.strip()
+        local_pdf = Path(cfg['local_pdf_dir']).resolve() / f"{pdf_name}.pdf"
+        if not local_pdf.exists():
+            continue
+        file_path = f"{pdf_folder_base}/{cfg['sp_subfolder']}/{pdf_name}.pdf"
+        encoded_id = urllib.parse.quote(file_path, safe='')
+        url = f"{sharepoint_base_url.rstrip('/')}/shared?listurl={encoded_listurl}&id={encoded_id}&parent={encoded_parent}"
+        new_cell.hyperlink = url
+        new_cell.font = hyperlink_font
 
-# Final logs
-print(f"✅ Extracted {len(checked_df)} rows from sheet: {sheet_name}", file=sys.stderr)
-print(f"⏱️ Extract completed in {round(time.time() - start, 2)}s", file=sys.stderr)
-
-# Output for run_all.sh
-print(str(output_csv))
-print(str(output_path))
+wb.save(excel_path)
+print(f"✅ Hyperlink sheets updated in: {excel_path}")
